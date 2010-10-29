@@ -32,58 +32,56 @@ int Distance(int src_x, int src_y, int dest_x, int dest_y) {
   return square(dest_y - src_y) + square(dest_x - src_x);
 }
 
+void SendAttackers(std:vector<Planet> attacking_planets, const PlanetWars& pw)
+{
+	int x = 0; // x coord of source
+	int y = 0; //y coord of source
+	int weakest = -1; //Weakest planet
+	int source = -1; //Current planet
+	double weak_score = -999999.0; //Weakest planet score
+	
+	std::vector<Planet> not_my_planets = pw.NotMyPlanets(); //Put the planets that aren't ours into a vector
+	
+	
+	for(int i = 0;i<attacking_planets.size();++i)
+	{
+		//iterate through the all the attacking planets
+		const Planet& myPlanet = attacking_planets[i];
+		 for (int j = 0; j < not_my_planets.size(); ++j)
+		 {
+			const Planet& p = not_my_planets[j] //find the weakest planet relative to the ith attacking planet
+			x = myPlanet.X;
+			y = myPlanet.Y;
+			double cur_score = (double)p.GrowthRate()/((double)p.NumShips()*(double)Distance(x, y, p.X(), p.Y())); //calculate score of weakest planet
+			if (cur_score > weak_score) //check if current score is greater than the previous score
+			{
+				//if yes, set jth planet to the weakest planet.
+				weak_score = cur_score;
+				weakest = p.PlanetID();
+			}
+		}
+		source = myPlanet.PlanetID(); //set the source to the ith planet
+		source_num_ships = myPlanet.NumShips(); //set number of ships to the ith planet
+		
+		//check if it is a valid planet, send half the fleet
+		if (source >= 0 && weakest >= 0) 
+			{
+				int num_ships = source_num_ships / 2;
+				pw.IssueOrder(source, weakest, num_ships);
+			}	
+	source = -1;
+	weakest = -1;
+	}
+}
 void DoTurn(const PlanetWars& pw) {
   // (1) If we currently have a fleet in flight, just do nothing.
   if (pw.MyFleets().size() >= 50) {
     return;
   }
-
-  int x = 0;
-  int y = 0;
-
-  std::vector<Planet> my_planets = pw.MyPlanets();
-  MidPoint(my_planets, x,y);
-
-  // (Stephen) Let's find the best planets to attack from.
-
-  std::vector<Planet> not_my_planets = pw.NotMyPlanets();
-
-  // (2) Find my strongest planet.
-  int source = -1;
-  double source_score = -999999.0;
-  int source_num_ships = 0;
-  for (int i = 0; i < my_planets.size(); ++i) {
-    const Planet& p = my_planets[i];
-    double score = (double)p.NumShips();
-    if (score > source_score) {
-      source_score = score;
-      source = p.PlanetID();
-      source_num_ships = p.NumShips();
-    }
-  }
-
-  // (3) Find the weakest enemy or neutral planet.
-  int dest = -1;
-  double dest_score = -999999.0;
-  for (int i = 0; i < not_my_planets.size(); ++i) {
-    const Planet& p = not_my_planets[i];
-    double score = (double)p.GrowthRate()/((double)p.NumShips()*
-      (double)Distance(x, y, p.X(), p.Y()));
-    if (score > dest_score) {
-      dest_score = score;
-      dest = p.PlanetID();
-    }
-  }
-  // (4) Send half the ships from my strongest planet to the weakest
-  // planet that I do not own.
-  if (source >= 0 && dest >= 0) {
-    int num_ships = source_num_ships / 2;
-    pw.IssueOrder(source, dest, num_ships);
-  }
-
-  source = -1;
-  dest = -1;
+	
 }
+
+void 
 
 // This is just the main game loop that takes care of communicating with the
 // game engine for you. You don't have to understand or change the code below.
