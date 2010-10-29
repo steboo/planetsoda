@@ -32,6 +32,44 @@ int Distance(int src_x, int src_y, int dest_x, int dest_y) {
   return square(dest_y - src_y) + square(dest_x - src_x);
 }
 
+void AssignRoles(std::vector<Planet> MyPlanets,std::vector<Planet> EnemyPlanets,
+		 std::vector<Planet> &Attackers,std::vector<Planet> &Defenders)
+{
+std::vector<Planet> attack;
+std::vector<Planet> defend = MyPlanets;
+
+
+for(int i = 0; i < EnemyPlanets.size(); i++)
+{
+  Planet dest = Planet(-1,0,0,0,0,0);
+  double dest_score = 999999.0;
+  for (int j = 0; j < MyPlanets.size(); j++) {
+    const Planet& _p = MyPlanets[j];
+    double score = (double)Distance(_p.X(), _p.Y(), EnemyPlanets[i].X(), EnemyPlanets[i].Y());
+    if (score < dest_score) {
+      dest_score = score;
+      dest = _p;
+    }
+  }
+  bool add = true;
+  for (int k = 0; k < attack.size(); k++) {
+    if(dest.PlanetID() == attack[k].PlanetID()) add = false;
+  }
+  if(add) attack.push_back(dest);
+}
+for (int i = 0; i < defend.size(); i++){
+  for (int j = 0; j < attack.size(); j++){
+    if(defend[i].PlanetID() == attack[j].PlanetID()) {
+      defend.erase(defend.begin()+i);
+      i = 0;
+      }
+  }
+}
+
+Attackers = attack;
+Defenders = defend;
+}
+
 void DoTurn(const PlanetWars& pw) {
   // (1) If we currently have a fleet in flight, just do nothing.
   if (pw.MyFleets().size() >= 50) {
@@ -43,6 +81,11 @@ void DoTurn(const PlanetWars& pw) {
 
   std::vector<Planet> my_planets = pw.MyPlanets();
   MidPoint(my_planets, x,y);
+
+  std::vector<Planet> attackers;
+  std::vector<Planet> defenders;
+  AssignRoles(pw.MyPlanets(),pw.EnemyPlanets(),
+		 attackers,defenders);
 
   // (Stephen) Let's find the best planets to attack from.
 
