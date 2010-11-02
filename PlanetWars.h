@@ -9,6 +9,49 @@
 #include <string>
 #include <vector>
 
+// A Request object is instantiated by friendly planets under distress.
+class Request {
+ public:
+  Request(int target_planet,
+          int num_ships,
+          int turns_remaining);
+
+  int TargetPlanet() const;
+
+  int NumShips() const;
+
+  int TurnsRemaining() const;
+
+ private:
+  int target_planet_;
+  int num_ships_;
+  int turns_remaining_;
+};
+
+// A Commitment object is instantiated by friendly planets committing aid to
+// planets under distress.
+class Commitment {
+ public:
+  Commitment(int target_planet,
+          int source_planet,
+          int num_ships,
+          int turns_remaining);
+
+  int TargetPlanet() const;
+
+  int SourcePlanet() const;
+
+  int NumShips() const;
+
+  int TurnsRemaining() const;
+
+ private:
+  int target_planet_;
+  int source_planet_;
+  int num_ships_;
+  int turns_remaining_;
+};
+
 // This is a utility class that parses strings.
 class StringUtil {
  public:
