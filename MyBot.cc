@@ -1,5 +1,7 @@
 #include <iostream>
 #include "PlanetWars.h"
+#include <algorithm>
+
 
 // The DoTurn function is where your code goes. The PlanetWars object contains
 // the state of the game, including information about all planets and fleets
@@ -70,7 +72,33 @@ void AssignRoles(std::vector<Planet> MyPlanets,std::vector<Planet> EnemyPlanets,
   Defenders = defend;
 }
 
+bool WeakestSort(const Planet& p1, const Planet& p2)
+{
+  return p1.NumShips() < p2.NumShips();
+}
+
+
 void DoTurn(const PlanetWars& pw) {
+
+  static int turnNum = 0; 
+  turnNum++;
+
+  // (0) initial attack sequence... Attacks as many weak neutral planets as possible. 
+  if (turnNum == 1){
+    std::vector<Planet> my_planet = pw.MyPlanets();
+    std::vector<Planet> Neutral = pw.NeutralPlanets();
+    std::sort(Neutral.begin(), Neutral.end(), WeakestSort);
+
+    int my_ships = my_planet[0].NumShips();
+    for(int i = 0; i < Neutral.size(); i++){
+      int num_ships = Neutral[i].NumShips()+1;
+      if(my_ships < num_ships+1) return;
+      pw.IssueOrder(my_planet[0].PlanetID(), Neutral[i].PlanetID(), num_ships);
+      my_ships -= num_ships;
+    }
+
+    return;
+  }
   // (1) If we currently have a fleet in flight, just do nothing.
   if (pw.MyFleets().size() >= 50) {
     return;
