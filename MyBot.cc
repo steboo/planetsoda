@@ -3,6 +3,163 @@
 #include <algorithm>
 
 
+std::vector<Commitment> make_commitments(const PlanetWars pw,
+                        const std::vector<Planet> defenders,
+                        const std::vector<Request> requests) {
+  std::vector<Commitment> commits;
+
+  // TODO: May want to sort requests.
+
+  // TODO: Consider incoming friendlies.
+
+  for (int i = 0; i < requests.size(); ++i) {
+    // Defenders should defend themselves first, if possible.
+    const Request& r = requests[i];
+    const Planet& p = pw.GetPlanet(r.TargetPlanet());
+
+    int max_self = p.GrowthRate()*r.TurnsRemaining() + p.NumShips();
+
+    bool send_self = true;
+    for (int k = 0; k < commits.size(); ++k) {
+      const Commitment& c2 = commits[k];
+      if (c2.SourcePlanet() == r.TargetPlanet()) {
+        send_self = false;
+        break;
+      }
+    }
+
+    int amount_to_send = 0;
+    if (r.NumShips() <= max_self)
+      amount_to_send = r.NumShips();
+    else
+      amount_to_send = max_self;
+
+    if (send_self) {
+      Commitment c(r.TargetPlanet(),
+                  r.TargetPlanet(),
+                  r.NumShips(),
+                  r.TurnsRemaining());
+      commits.push_back(c);
+    }
+
+    if (!send_self || r.NumShips() > max_self) {
+      int still_need;
+      still_need = r.NumShips() - max_self;
+
+      for (int j = 0; j < defenders.size(); ++j) {
+        const Planet& d = defenders[i];
+
+        if (d.PlanetID() == r.TargetPlanet())
+          continue; // We've already handled this.
+
+        // Prep time: number of turns before the fleet must leave to assist
+        int prep_time = pw.Distance(d.PlanetID(), r.TargetPlanet())
+                          - r.TurnsRemaining();
+
+        if (prep_time < 0)
+          continue; // Too far away to help.
+
+        // Don't defend from a planet if the planet has a previous commitment.
+        bool skip = false;
+        for (int k = 0; k < commits.size(); ++k) {
+          const Commitment& c2 = commits[k];
+          if (c2.SourcePlanet() == d.PlanetID()) {
+            skip = true;
+            break;
+          }
+        }
+
+        if (skip)
+          continue;
+
+        max_self = p.GrowthRate()*prep_time+p.NumShips();
+        amount_to_send = 0;
+
+        if (max_self > still_need)
+          amount_to_send = still_need;
+        else
+          amount_to_send = max_self;
+
+        Commitment c(d.PlanetID(),
+                    r.TargetPlanet(),
+                    amount_to_send, 
+                    prep_time);
+        commits.push_back(c);
+
+        if (still_need <= 0)
+          break;
+      }
+
+    }
+  }
+
+  return commits;
+}
+
+std::vector<Request> make_requests(const PlanetWars pw) {
+  std::vector<Fleet> enemy_fleets = pw.EnemyFleets();
+  std::vector<Request> requests;
+
+  for (int i = 0; i < enemy_fleets.size(); ++i) {
+    const Fleet& f = enemy_fleets[i];
+    int pid = f.DestinationPlanet();
+
+    if (f.Owner() != 1 && pw.GetPlanet(pid).Owner() == 1) {
+      // An enemy fleet is headed for us!
+      Request r(pid, f.NumShips(), f.TurnsRemaining());
+      requests.push_back(r);
+    }
+  }
+  
+  return requests;
+}
+
+Request::Request(int target_planet,
+        int num_ships,
+        int turns_remaining) {
+  target_planet_ = target_planet;
+  num_ships_ = num_ships;
+  turns_remaining_ = turns_remaining;
+}
+
+int Request::TargetPlanet() const {
+  return target_planet_;
+}
+
+int Request::NumShips() const {
+  return num_ships_;
+}
+
+int Request::TurnsRemaining() const {
+  return turns_remaining_;
+}
+
+Commitment::Commitment(int target_planet,
+        int source_planet,
+        int num_ships,
+        int turns_remaining) {
+  target_planet_ = target_planet;
+  source_planet_ = source_planet;
+  num_ships_ = num_ships;
+  turns_remaining_ = turns_remaining;
+}
+
+int Commitment::TargetPlanet() const {
+  return target_planet_;
+}
+
+int Commitment::SourcePlanet() const {
+  return source_planet_;
+}
+
+int Commitment::NumShips() const {
+  return num_ships_;
+}
+
+int Commitment::TurnsRemaining() const {
+  return turns_remaining_;
+}
+
 // The DoTurn function is where your code goes. The PlanetWars object contains
 // the state of the game, including information about all planets and fleets
 // that currently exist. Inside this function, you issue orders using the
@@ -35,7 +192,7 @@ int Distance(int src_x, int src_y, int dest_x, int dest_y) {
 }
 
 void AssignRoles(std::vector<Planet> MyPlanets,std::vector<Planet> EnemyPlanets,
-		 std::vector<Planet> &Attackers,std::vector<Planet> &Defenders)
+     std::vector<Planet> &Attackers,std::vector<Planet> &Defenders)
 {
   std::vector<Planet> attack;
   std::vector<Planet> defend = MyPlanets;
@@ -113,9 +270,72 @@ void DoTurn(const PlanetWars& pw) {
   std::vector<Planet> attackers;
   std::vector<Planet> defenders;
   AssignRoles(pw.MyPlanets(),pw.EnemyPlanets(),
-		 attackers,defenders);
+     attackers,defenders);
 
-  // (Stephen) Let's find the best planets to attack from.
+  // BEGIN step 2 of stage 2.
+  // Defend planets.
+  std::vector<Request> requests = make_requests(pw);
+  std::vector<Commitment> commits = make_commitments(pw,
+                                                    defenders,
+                                                    requests);
+
+
+  for (int i = 0; i < commits.size(); ++i) {
+    const Commitment& c = commits[i];
+
+    if (c.TurnsRemaining() == 0 && c.SourcePlanet() != c.TargetPlanet()) {
+      pw.IssueOrder(c.SourcePlanet(), c.TargetPlanet(), c.NumShips());
+
+      Planet p = pw.GetPlanet(c.SourcePlanet());
+      p.NumShips(p.NumShips() - c.NumShips());
+    }
+  }
+
+  // Stream remaining ships to attack planets.
+  for (int i = 0; i < defenders.size(); ++i) {
+    const Planet& d = defenders[i];
+
+    int saved_ships = 0;
+
+    // TODO: improve me
+    bool skip = false;
+    for (int j = 0; j < commits.size(); ++j) {
+      const Commitment& c = commits[j];
+      if (c.SourcePlanet() == d.PlanetID()) {
+        int buffer = d.GrowthRate();
+        int can_make = d.GrowthRate()*c.TurnsRemaining()+d.NumShips();
+        int needed = c.NumShips();
+        if (can_make <= buffer + needed) {
+          skip = true;
+          break;
+        }
+      }
+    }
+    if (skip) continue;
+
+    int closest_attacker = -1;
+    int closest_dist = 29999;
+
+    for (int j = 0; j < attackers.size(); ++j) {
+      const Planet& a = attackers[j];
+
+      int dist = pw.Distance(d.PlanetID(), a.PlanetID());
+      if (dist < closest_dist) {
+        closest_dist = dist;
+        closest_attacker = a.PlanetID();
+      }
+    }
+
+    int ships_to_send = d.NumShips() - 1;
+
+    if (ships_to_send > 0) {
+      pw.IssueOrder(d.PlanetID(), closest_attacker, ships_to_send);
+      Planet p = pw.GetPlanet(d.PlanetID());
+      p.NumShips(p.NumShips() - ships_to_send);
+    }
+  }
+  // END step 2 of stage 2.
+
 
   std::vector<Planet> not_my_planets = pw.NotMyPlanets();
 
@@ -123,8 +343,8 @@ void DoTurn(const PlanetWars& pw) {
   int source = -1;
   double source_score = -999999.0;
   int source_num_ships = 0;
-  for (int i = 0; i < my_planets.size(); ++i) {
-    const Planet& p = my_planets[i];
+  for (int i = 0; i < attackers.size(); ++i) {
+    const Planet& p = attackers[i];
     double score = (double)p.NumShips();
     if (score > source_score) {
       source_score = score;
