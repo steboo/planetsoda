@@ -29,25 +29,26 @@ std::vector<Commitment> make_commitments(const PlanetWars pw,
     }
 
     int amount_to_send = 0;
-    if (r.NumShips() <= max_self)
-      amount_to_send = r.NumShips();
-    else
-      amount_to_send = max_self;
+    int still_need = r.NumShips();
 
     if (send_self) {
+      if (r.NumShips() <= max_self)
+        amount_to_send = r.NumShips();
+      else
+        amount_to_send = max_self;
+
       Commitment c(r.TargetPlanet(),
                   r.TargetPlanet(),
-                  r.NumShips(),
+                  amount_to_send,
                   r.TurnsRemaining());
       commits.push_back(c);
+
+      still_need -= amount_to_send;
     }
-
-    if (!send_self || r.NumShips() > max_self) {
-      int still_need;
-      still_need = r.NumShips() - max_self;
-
+    
+    if (!send_self || still_need > 0) {
       for (int j = 0; j < defenders.size(); ++j) {
-        const Planet& d = defenders[i];
+        const Planet& d = defenders[j];
 
         if (d.PlanetID() == r.TargetPlanet())
           continue; // We've already handled this.
@@ -134,8 +135,8 @@ int Request::TurnsRemaining() const {
   return turns_remaining_;
 }
 
-Commitment::Commitment(int target_planet,
-        int source_planet,
+Commitment::Commitment(int source_planet,
+        int target_planet,
         int num_ships,
         int turns_remaining) {
   target_planet_ = target_planet;
@@ -227,7 +228,8 @@ void SendAttackers(std::vector<Planet> attacking_planets, const PlanetWars& pw)
 		if (source >= 0 && weakest >= 0) 
 			{
 				int num_ships = source_num_ships / 2;
-				pw.IssueOrder(source, weakest, num_ships);
+        if (num_ships > 0)
+				  pw.IssueOrder(source, weakest, num_ships);
 			}	
 	source = -1;
 	weakest = -1;
@@ -328,7 +330,7 @@ void DoTurn(const PlanetWars& pw) {
       pw.IssueOrder(c.SourcePlanet(), c.TargetPlanet(), c.NumShips());
 
       Planet p = pw.GetPlanet(c.SourcePlanet());
-      p.NumShips(p.NumShips() - c.NumShips());
+      //p.NumShips(p.NumShips() - c.NumShips());
     }
   }
 
@@ -369,10 +371,10 @@ void DoTurn(const PlanetWars& pw) {
 
     int ships_to_send = d.NumShips() - 1;
 
-    if (ships_to_send > 0) {
+    if (closest_attacker != -1 && ships_to_send > 0) {
       pw.IssueOrder(d.PlanetID(), closest_attacker, ships_to_send);
       Planet p = pw.GetPlanet(d.PlanetID());
-      p.NumShips(p.NumShips() - ships_to_send);
+      //p.NumShips(p.NumShips() - ships_to_send);
     }
   }
   // END step 2 of stage 2.
